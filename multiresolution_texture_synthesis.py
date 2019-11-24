@@ -44,12 +44,12 @@ def reconstructed(lp):
 	return corrected_image
 
 
-def nearest_neighbor(pyramid,level):
+def nearest_neighbor(pyramid,level,child_kernel,parent_kernel):
     rows,cols = pyramid[level].shape 
     vectors = []
     for i in range(rows):
         for j in range(cols):
-            neighbor = getNeighbourhood(pyramid,level,[i,j])
+            neighbor = getNeighbourhood(pyramid,level,[i,j],child_kernel,parent_kernel)
             if(len(vectors)==0):
                 vectors_arr = np.array([neighbor]).reshape((1,neighbor.shape[0]))
                 vectors.append(1)
@@ -65,7 +65,8 @@ def randomRow2Map(copyFrom, copyTo,rowsToCopy):
     copyTo[0:rowsToCopy,0:int(colsEx/2)] = copyFrom[rand_r:rand_r+rowsToCopy, rand_c:rand_c+int(colsEx/2)]
     return copyTo
 
-def multi_resolution_texture_synthesis(img,output_shape,levels):
+def multi_resolution_texture_synthesis(img,output_shape,levels,save_path,child_kernel,parent_kernel):
+    os.makedirs(save_path[:-1])
     output_img = np.zeros(output_shape)
     input_gp = gaussian_pyramid(img,levels)
     output_gp = gaussian_pyramid(output_img,levels)
@@ -75,14 +76,14 @@ def multi_resolution_texture_synthesis(img,output_shape,levels):
         curr_level_inp = input_gp[i]
         curr_level_out = output_gp[i]
         rows,cols = curr_level_out.shape
-        tree,n_vectors = nearest_neighbor(input_gp,i)
+        tree,n_vectors = nearest_neighbor(input_gp,i,child_kernel,parent_kernel)
         for r in range(rows):
             for c in range(cols):
-                C = findBestMatch(input_gp,output_gp,i,[r,c],tree,k = min(n_vectors,1))
+                C = findBestMatch(input_gp,output_gp,i,[r,c],tree,min(n_vectors,1),child_kernel,parent_kernel)
                 output_gp[i][r,c] = input_gp[i][C[0],C[1]]
-        plt.imshow(output_gp[i],cmap='gray')
-        plt.show()
+        plt.imsave(save_path+"synth_level_"+str(i)+".jpg",output_gp[i],cmap='gray')
         print("done")
+    plt.imsave(save_path+"output.jpg",output_gp[0],cmap='gray')
             
 
 def padding(img, pad):
@@ -108,17 +109,17 @@ def getSingleLevelNeighbourhood(pyramid,level, coord, kernel, mode):
     if mode=='child': 
         return padded.reshape(np.shape(padded)[0]*np.shape(padded)[1], 1)[0:floor(kernel*kernel/2), :]
 
-def getNeighbourhood(pyramid, pyramidLevel, coord, mirror_hor=False, mirror_vert=False):
-    Nchild = getSingleLevelNeighbourhood(pyramid, pyramidLevel, coord, 5, mode='child')
+def getNeighbourhood(pyramid, pyramidLevel, coord,child_kernel,parent_kernel, mirror_hor=False, mirror_vert=False):
+    Nchild = getSingleLevelNeighbourhood(pyramid, pyramidLevel, coord, child_kernel, mode='child')
     if pyramidLevel+1<=len(pyramid)-1:
-        Nparent = getSingleLevelNeighbourhood(pyramid, pyramidLevel+1, coord, 3, mode='parent')
+        Nparent = getSingleLevelNeighbourhood(pyramid, pyramidLevel+1, coord, parent_kernel, mode='parent')
     else:
-        Nparent = np.zeros((3 * 3, 1))
+        Nparent = np.zeros((parent_kernel * parent_kernel, 1))
     N = np.concatenate((Nchild, Nparent), axis=0)
     return N
 
-def findBestMatch(G_inp,G_out,curr_level,coord,tree,k):
-    N = getNeighbourhood(G_out,curr_level,coord)
+def findBestMatch(G_inp,G_out,curr_level,coord,tree,k,child_kernel,parent_kernel):
+    N = getNeighbourhood(G_out,curr_level,coord,child_kernel,parent_kernel)
     dist,ind = tree.query([N.reshape(-1)],k=k)
     dist = dist[0]
     ind = ind[0]
@@ -126,14 +127,13 @@ def findBestMatch(G_inp,G_out,curr_level,coord,tree,k):
     r = floor(coord/G_inp[curr_level].shape[0])
     c = coord - r*G_inp[curr_level].shape[1]
     return [r,c]
-
-
-
-if __name__ == "__main__":
-    img_path = "brodatz/D95.gif"
-    img = color.rgb2gray(io.imread(img_path))
-    if(img.shape[0]>400):
-        img = rescale(img,0.15,anti_aliasing=False)
-        plt.imshow(img,cmap='gray')
-        plt.show()
-    multi_resolution_texture_synthesis(img,(200,200),3)
+def load_sample_image(image_path,crop=False):
+    sample_image = color.rgb2gray(io.imread(image_path))
+    if(crop!=True):
+        if(sample_image.shape[0]>400):
+            sample_image = rescale(sample_image,0.15,anti_aliasing=True)
+    else:
+        sample_image = sample_image[:150,:150]
+    sample_image = sample_image/255.0
+    print(sample_image.shape)
+    return sample_image
