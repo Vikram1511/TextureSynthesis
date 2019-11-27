@@ -15,9 +15,8 @@ error_threshold_max = 0.1
 
 def load_sample_image(image_path):
     sample_image = color.rgb2gray(io.imread(image_path))
-    m,n = sample_image.shape
     if(sample_image.shape[0]>400):
-        sample_image = rescale(sample_image,0.10,anti_aliasing=True)
+        sample_image = rescale(sample_image,0.15,anti_aliasing=False)
     sample_image = sample_image/255.0
     print(sample_image.shape)
     return sample_image
@@ -98,7 +97,8 @@ def texture_synt(sample_img,output_shape,save_path):
                                        pixel_col - half_window : pixel_col + half_window + 1]))
 
         order = np.argsort(-np.array(neighborHood, dtype=int))
-        for x, i in enumerate(order):
+        # print order
+        for x, i in enumerate(order): #range(len(candidate_pixel_row)):
             pixel_row = candidate_pixel_row[i]
             pixel_col = candidate_pixel_col[i]
             template_img = out_image_padded[pixel_row - half_window + half_window:pixel_row + half_window + half_window + 1,
@@ -109,16 +109,22 @@ def texture_synt(sample_img,output_shape,save_path):
                 pixel_col - half_window + half_window:pixel_col + half_window+ half_window + 1],
                 g_mask)
             pick = randint(0, len(best_match)-1)
+            # print "Matches= ", len(best_match)
             if best_match[pick][0]<=error_threshold_max:
                 out_image_padded[half_window+pixel_row][half_window+pixel_col] = best_match[pick][1]
                 out_image[pixel_row][pixel_col]=best_match[pick][1]
                 filled_map_padded[half_window+pixel_row][half_window+pixel_col] = 1
                 filled_map[pixel_row][pixel_col]=1
                 number_filled+=1
-                if number_filled % 5000 == 0:
-                    plt.imsave(save_path+"out"+str(number_filled)+"_"+str(k_size)+"_.jpg",out_image,cmap='gray')
+                if number_filled % 2000 == 0:
+                    plt.imsave(save_path+"out"+str(number_filled)+".jpg",out_image,cmap='gray')
                 progress = True
         if not progress:
             error_threshold_max *= 1.1
     print("time taken",time.time()-start_time)
-    plt.imsave(save_path+"output_"+str(k_size)+".jpg", out_image,cmap='gray')
+    plt.imsave(save_path+"output.jpg", out_image,cmap='gray')
+
+# if __name__ == "__main__":
+#     img_path = sys.argv[1]
+#     sample_img = load_sample_image(img_path)
+#     texture_synt(sample_img,(200,200))
